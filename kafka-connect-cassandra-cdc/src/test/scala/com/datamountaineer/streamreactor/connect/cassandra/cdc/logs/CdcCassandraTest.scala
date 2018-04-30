@@ -843,6 +843,53 @@ class CdcCassandraTest extends WordSpec with Matchers with BeforeAndAfterAll {
       // EmbeddedCassandraServerHelper.cleanDataEmbeddedCassandra("datamountaineer")
     }
 
+    "create multi-column partition-key table and insert 1 record" in {
+      val keyspace = "custom"
+      val table = "movies_by_genre"
+      session.execute(s"CREATE KEYSPACE $keyspace WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor' : 1};")
+      session.execute(
+        s"""CREATE TABLE IF NOT EXISTS $keyspace.$table (title text, genre text, year int, duration int, director text, country text,
+           |PRIMARY KEY ((genre, year), duration)) WITH CLUSTERING ORDER BY (duration ASC) and cdc = true;""".stripMargin)
+      session.execute(s"INSERT INTO $keyspace.$table (title, genre, year, duration, director, country) VALUES " +
+        s"('t1','g1',1991,1111,'d1','c1');")
+      val cdc = createCdcAndFlush(keyspace, table)
+      Thread.sleep(4000)
+      var mutations = cdc.getMutations()
+      mutations.size shouldBe 1
+    }
+
+    "create table with ReversedType float column and insert 1 record" in {
+      val keyspace = "custom2"
+      val table = "movies_by_genre2"
+      session.execute(s"CREATE KEYSPACE $keyspace WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor' : 1};")
+      session.execute(
+        s"""CREATE TABLE IF NOT EXISTS $keyspace.$table (title text, genre text, year int, rating float, duration int, director text, country text,
+           |PRIMARY KEY ((genre, year), rating, duration)) WITH CLUSTERING ORDER BY (rating DESC, duration ASC) and cdc = true;""".stripMargin)
+      session.execute(s"INSERT INTO $keyspace.$table (title, genre, year, rating, duration, director, country) VALUES " +
+        s"('t1','g1',1991,1.991,1111,'d1','c1');")
+      val cdc = createCdcAndFlush(keyspace, table)
+      Thread.sleep(4000)
+      var mutations = cdc.getMutations()
+      mutations.size shouldBe 1
+    }
+
+//    "testRead" in {
+//      implicit val conf = CdcConfig(new CassandraConnect(ImmutableMap.builder()
+//        .put("name", "cassandra-connect-cdc")
+//        .put("tasks", " 1")
+//        .put("connector.class", "com.datamountaineer.streamreactor.connect.cassandra.cdc.CassandraCdcSourceConnector")
+//        .put("connect.cassandra.kcql", "INSERT INTO users-topic SELECT * FROM custom.movies_by_genre")
+//        .put("connect.cassandra.yaml.path.url", "cassandracdc/cassandra.yaml")
+//        .put("connect.cassandra.port", " 9042")
+//        .put("connect.cassandra.contact.points", "localhost")
+//        build()))
+//      val cdc = new CdcCassandra()
+//      cdc.initialize()
+//      cdc.logReader.read(
+//        new File("/Users/bhaveshthakker/Documents/workspace/stream-reactor/kafka-connect-cassandra-cdc/src/test/resources/cdc_raw/CommitLog-6-1525104824975.log"),
+//        NONE, Int.MaxValue)
+//    }
+
     def createCdcAndFlush(keyspace: String, table: String): CdcCassandra = {
       val cdcMgr = CommitLog.instance.segmentManager.asInstanceOf[CommitLogSegmentManagerCDC]
       cdcMgr == null shouldBe false
@@ -867,48 +914,6 @@ class CdcCassandraTest extends WordSpec with Matchers with BeforeAndAfterAll {
       cdcMgr.awaitManagementCompletion()
       cdc
     }
-
-
-    "create table custom.movies_by_genre ( id text PRIMARY KEY, something set<int> ) and insert 1 record" in {
-
-      val keyspace = "custom"
-      val table = "movies_by_genre"
-      session.execute(s"CREATE KEYSPACE $keyspace WITH REPLICATION = {'class' : 'SimpleStrategy', 'replication_factor' : 1};")
-
-      session.execute(
-        s"""CREATE TABLE IF NOT EXISTS $table (title text, genre text, year int, rating float, duration int, director text, country text,
-           |PRIMARY KEY ((genre, year), rating, duration)) WITH CLUSTERING ORDER BY (rating DESC, duration ASC) and cdc = true;""".stripMargin)
-
-
-      //session.execute(s"ALTER TABLE $keyspace.$table WITH cdc=true;")
-      session.execute(s"INSERT INTO $keyspace.$table (title text, genre text, year int, rating float, duration int, director text, country text) VALUES " +
-        s"('id1', {'t1','g1',1991,1.991,1111,'d1','c1'});")
-
-      val cdc = createCdcAndFlush(keyspace, table)
-
-      Thread.sleep(4000)
-      var mutations = cdc.getMutations()
-
-      mutations.size shouldBe 1
-
-    }
-  }
-
-  "testRead" in {
-    implicit val conf = CdcConfig(new CassandraConnect(ImmutableMap.builder()
-      .put("name", "cassandra-connect-cdc")
-      .put("tasks", " 1")
-      .put("connector.class", "com.datamountaineer.streamreactor.connect.cassandra.cdc.CassandraCdcSourceConnector")
-      .put("connect.cassandra.kcql", "INSERT INTO users-topic SELECT * FROM custom.movies_by_genre")
-      .put("connect.cassandra.yaml.path.url", "cassandracdc/cassandra.yaml")
-      .put("connect.cassandra.port", " 9042")
-      .put("connect.cassandra.contact.points", "localhost")
-      build()))
-    val cdc = new CdcCassandra()
-    cdc.initialize()
-    cdc.logReader.read(
-      new File("/Users/bhaveshthakker/Documents/workspace/stream-reactor/kafka-connect-cassandra-cdc/src/test/resources/cdc_raw/CommitLog-6-1525104824975.log"),
-      NONE, Int.MaxValue)
   }
 
 }
