@@ -85,6 +85,7 @@ object ConnectSchemaBuilder {
 
   def fromType(`type`: AbstractType[_])(implicit config: CdcConfig): Schema = {
     `type` match {
+      case r: ReversedType[_] => fromType(r.baseType)
       case _: AsciiType => Schema.OPTIONAL_STRING_SCHEMA
       case _: LongType => Schema.OPTIONAL_INT64_SCHEMA
       case _: BytesType => Schema.OPTIONAL_BYTES_SCHEMA

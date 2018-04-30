@@ -15,9 +15,12 @@
  */
 package com.datamountaineer.streamreactor.connect.cassandra.cdc.logs
 
+import java.nio.ByteBuffer
+
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.config.CdcConfig
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.metadata.{ConnectSchemaBuilder, SubscriptionDataProvider}
-import org.apache.cassandra.config.CFMetaData
+import org.apache.cassandra.config.{CFMetaData, ColumnDefinition}
+import org.apache.cassandra.db.marshal.CompositeType
 import org.apache.cassandra.db.partitions.PartitionUpdate
 import org.apache.kafka.connect.data.Struct
 
@@ -34,11 +37,19 @@ object KeyStructBuilder {
 
     val pkSchema = schema.field(ConnectSchemaBuilder.KeysField).schema()
     val keysStruct = new Struct(pkSchema)
-    cf.partitionKeyColumns().foreach { cd =>
-      val keyValue = cd.cellValueType().getSerializer.deserialize(pu.partitionKey().getKey)
+
+    val isMultiColumnPartitionKey = cf.partitionKeyColumns().size() > 1
+    if (isMultiColumnPartitionKey) {
+      val components = CompositeType.splitName(pu.partitionKey().getKey)
+      cf.partitionKeyColumns().zip(components).foreach(_ => doForeach(_, _))
+    } else {
+      cf.partitionKeyColumns().foreach(cd => doForeach(cd, pu.partitionKey().getKey))
+    }
+
+    def doForeach(cd: ColumnDefinition, byteBuffer: ByteBuffer): Unit = {
+      val keyValue = cd.cellValueType().getSerializer.deserialize(byteBuffer)
       val coercedValue = ConnectSchemaBuilder.coerceValue(keyValue, cd.cellValueType(), pkSchema.field(cd.name.toString).schema())
       keysStruct.put(cd.name.toString, coercedValue)
-      //pu.partitionKey()
     }
     /* cf.primaryKeyColumns()
        .map { cd =>

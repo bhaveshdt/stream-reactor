@@ -15,9 +15,12 @@
  */
 package com.datamountaineer.streamreactor.connect.cassandra.cdc.logs
 
+import java.nio.ByteBuffer
+
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.config.CdcConfig
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.metadata.ConnectSchemaBuilder
-import org.apache.cassandra.config.CFMetaData
+import org.apache.cassandra.config.{CFMetaData, ColumnDefinition}
+import org.apache.cassandra.db.marshal.CompositeType
 import org.apache.cassandra.db.partitions.PartitionUpdate
 import org.apache.kafka.connect.data.Struct
 
@@ -27,17 +30,24 @@ import scala.collection.JavaConversions._
   * Sets the values for the primary key columns on the given Kafka Connect Struct.
   */
 object PopulatePKColumns {
-  def apply(struct: Struct, cf: CFMetaData, pu: PartitionUpdate)(implicit config:CdcConfig): Unit = {
-    cf.partitionKeyColumns()
-      .map { cd =>
-        val value = cd.cellValueType().getSerializer.deserialize(pu.partitionKey().getKey)
-        val coerced = ConnectSchemaBuilder.coerceValue(
-          value,
-          cd.cellValueType(),
-          struct.schema().field(cd.name.toString).schema()
-        )
+  def apply(struct: Struct, cf: CFMetaData, pu: PartitionUpdate)(implicit config: CdcConfig): Unit = {
+    val isMultiColumnPartitionKey = cf.partitionKeyColumns().size() > 1
+    if (isMultiColumnPartitionKey) {
+      val components = CompositeType.splitName(pu.partitionKey().getKey)
+      cf.partitionKeyColumns().zip(components).map(_ => doMap(_, _))
+    } else {
+      cf.partitionKeyColumns().map(cd => doMap(cd, pu.partitionKey().getKey))
+    }
 
-        struct.put(cd.name.toString, coerced)
-      }
+    def doMap(cd: ColumnDefinition, byteBuffer: ByteBuffer): Struct = {
+      val value = cd.cellValueType().getSerializer.deserialize(byteBuffer)
+      val coerced = ConnectSchemaBuilder.coerceValue(
+        value,
+        cd.cellValueType(),
+        struct.schema().field(cd.name.toString).schema()
+      )
+
+      struct.put(cd.name.toString, coerced)
+    }
   }
 }

@@ -63,7 +63,7 @@ class CdcCassandra()(implicit config: CdcConfig) extends AutoCloseable with Stri
   }
   private val fileListing = new CdcFileListing(cdcFolder)
 
-  private var logReader: CdcCommitLogReader = _
+  var logReader: CdcCommitLogReader = _
 
   private val executor = Executors.newFixedThreadPool(1)
 
@@ -223,7 +223,7 @@ class CdcCassandra()(implicit config: CdcConfig) extends AutoCloseable with Stri
   }
 
 
-  private def initialize() = {
+  def initialize() = {
     //during unit tests if we call the content within the if it will upset the state
     //and the session and cluster are dropped
     //yes, unfortunately cassandra framework keeps the config access private
