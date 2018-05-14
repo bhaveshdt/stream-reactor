@@ -16,14 +16,14 @@ class CdcCassandraTest2 extends FunSuite with StrictLogging {
       .put("tasks", " 1")
       .put("connector.class", "com.datamountaineer.streamreactor.connect.cassandra.cdc.CassandraCdcSourceConnector")
       .put("connect.cassandra.kcql", "INSERT INTO users-topic SELECT * FROM custom.movies_by_genre")
-      .put("connect.cassandra.yaml.path.url", "cassandracdc/cassandra.yaml")
+      .put("connect.cassandra.yaml.path.url", "/Users/bhaveshthakker/Documents/workspace/ocr-analytics-jobs/docker-resources/dse/dependencies/confluent/cassandra.yaml")
       .put("connect.cassandra.port", " 9042")
       .put("connect.cassandra.contact.points", "localhost")
       build()))
     val cdc = new CdcCassandra()
     cdc.initialize()
     cdc.logReader.read(
-      new File("/Users/bhaveshthakker/Documents/workspace/stream-reactor/kafka-connect-cassandra-cdc/src/test/resources/cdc_raw/CommitLog-6-1525104824975.log"),
+      new File("/Users/bhaveshthakker/Documents/workspace/stream-reactor/kafka-connect-cassandra-cdc/src/test/resources/cdc_raw/CommitLog-600-1525974948584.log"),
       NONE, Int.MaxValue)
   }
 

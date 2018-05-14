@@ -60,7 +60,7 @@ class CdcCommitLogReader(callback: SourceRecord => Unit)(implicit dataProvider: 
   override def handleMutation(m: Mutation, size: Int, entryLocation: Int, desc: CommitLogDescriptor): Unit = {
     dataProvider.getColumnFamilies(m.getKeyspaceName).foreach { columnFamilySet =>
       m.getPartitionUpdates
-        .filter(pu => columnFamilySet.contains(pu.metadata().cfName))
+        .filter(pu => columnFamilySet.contains(pu.metadata().name))
         .foreach { pu =>
           pu.read(m.getKeyspaceName, entryLocation, desc, callback)
         }

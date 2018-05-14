@@ -4,14 +4,12 @@ import java.io.File
 import java.nio.file.{Files, Paths}
 import java.util
 
-import com.datamountaineer.streamreactor.connect.cassandra.cdc.config.{CassandraConfig, CassandraConnect, CdcConfig, CdcSubscription}
+import com.datamountaineer.streamreactor.connect.cassandra.cdc.config.{CassandraConfig, CdcConfig, CdcSubscription}
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.logs.CommitLogSegmentManagerCDCExtensions._
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.metadata.ConnectSchemaBuilder
 import com.datastax.driver.core.Session
-import com.google.common.collect.ImmutableMap
 import org.apache.cassandra.config.DatabaseDescriptor
 import org.apache.cassandra.db.Keyspace
-import org.apache.cassandra.db.commitlog.CommitLogPosition.NONE
 import org.apache.cassandra.db.commitlog.{CommitLog, CommitLogSegmentManagerCDC}
 import org.apache.kafka.connect.data.Struct
 import org.cassandraunit.utils.EmbeddedCassandraServerHelper

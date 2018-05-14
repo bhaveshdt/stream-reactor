@@ -35,8 +35,8 @@ class SubscriptionDataProvider(val keyspaces: Seq[KeyspaceMetadata])(implicit co
       val columnFamilies = cfMap(ks.name)
 
       ks.name -> ks.tables.iterator()
-        .filter(cf => columnFamilies.contains(cf.cfName))
-        .map(cf => cf.cfName -> ConnectSchemaBuilder.keySchema(cf))
+        .filter(cf => columnFamilies.contains(cf.name))
+        .map(cf => cf.name -> ConnectSchemaBuilder.keySchema(cf))
         .toMap
     }.toMap
 
@@ -45,8 +45,8 @@ class SubscriptionDataProvider(val keyspaces: Seq[KeyspaceMetadata])(implicit co
       val columnFamilies = cfMap(ks.name)
 
       ks.name -> ks.tables.iterator()
-        .filter(cf => columnFamilies.contains(cf.cfName))
-        .map(cf => cf.cfName -> ConnectSchemaBuilder.cdcSchema(cf))
+        .filter(cf => columnFamilies.contains(cf.name))
+        .map(cf => cf.name -> ConnectSchemaBuilder.cdcSchema(cf))
         .toMap
     }.toMap
 

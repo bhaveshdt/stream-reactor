@@ -19,21 +19,21 @@ import java.nio.ByteBuffer
 
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.config.CdcConfig
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.metadata.{ConnectSchemaBuilder, SubscriptionDataProvider}
-import org.apache.cassandra.config.{CFMetaData, ColumnDefinition}
 import org.apache.cassandra.db.marshal.CompositeType
 import org.apache.cassandra.db.partitions.PartitionUpdate
+import org.apache.cassandra.schema.{ColumnMetadata, TableMetadata}
 import org.apache.kafka.connect.data.Struct
 
 import scala.collection.JavaConversions._
 
 object KeyStructBuilder {
-  def apply(cf: CFMetaData, pu: PartitionUpdate)(implicit dataProvider: SubscriptionDataProvider, config: CdcConfig): Struct = {
-    val schema = dataProvider.getKeySchema(cf.ksName, cf.cfName)
-      .getOrElse(throw new IllegalArgumentException(s"Cannot find '${cf.ksName}.${cf.cfName}' schema for Connect Source Record Key."))
+  def apply(cf: TableMetadata, pu: PartitionUpdate)(implicit dataProvider: SubscriptionDataProvider, config: CdcConfig): Struct = {
+    val schema = dataProvider.getKeySchema(cf.keyspace, cf.name)
+      .getOrElse(throw new IllegalArgumentException(s"Cannot find '${cf.keyspace}.${cf.name}' schema for Connect Source Record Key."))
 
     val struct = new Struct(schema)
-    struct.put(ConnectSchemaBuilder.KeyspaceField, cf.ksName)
-    struct.put(ConnectSchemaBuilder.TableField, cf.cfName)
+    struct.put(ConnectSchemaBuilder.KeyspaceField, cf.keyspace)
+    struct.put(ConnectSchemaBuilder.TableField, cf.name)
 
     val pkSchema = schema.field(ConnectSchemaBuilder.KeysField).schema()
     val keysStruct = new Struct(pkSchema)
@@ -46,7 +46,7 @@ object KeyStructBuilder {
       cf.partitionKeyColumns().foreach(cd => doForeach(cd, pu.partitionKey().getKey))
     }
 
-    def doForeach(cd: ColumnDefinition, byteBuffer: ByteBuffer): Unit = {
+    def doForeach(cd: ColumnMetadata, byteBuffer: ByteBuffer): Unit = {
       val keyValue = cd.cellValueType().getSerializer.deserialize(byteBuffer)
       val coercedValue = ConnectSchemaBuilder.coerceValue(keyValue, cd.cellValueType(), pkSchema.field(cd.name.toString).schema())
       keysStruct.put(cd.name.toString, coercedValue)

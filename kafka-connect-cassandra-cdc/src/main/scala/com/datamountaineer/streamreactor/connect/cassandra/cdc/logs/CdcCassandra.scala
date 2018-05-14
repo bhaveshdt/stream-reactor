@@ -29,7 +29,7 @@ import com.datamountaineer.streamreactor.connect.cassandra.cdc.metadata.{Cassand
 import com.typesafe.scalalogging.slf4j.StrictLogging
 import org.apache.cassandra.config._
 import org.apache.cassandra.db.commitlog.CommitLogPosition
-import org.apache.cassandra.schema.SchemaKeyspace
+import org.apache.cassandra.schema.{Schema, SchemaConstants, SchemaKeyspace}
 import org.apache.kafka.connect.source.SourceRecord
 import org.joda.time.DateTime
 

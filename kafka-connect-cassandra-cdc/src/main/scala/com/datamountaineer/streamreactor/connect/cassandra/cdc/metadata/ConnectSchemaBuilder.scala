@@ -17,8 +17,8 @@ package com.datamountaineer.streamreactor.connect.cassandra.cdc.metadata
 
 
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.config.CdcConfig
-import org.apache.cassandra.config.{CFMetaData, ColumnDefinition}
 import org.apache.cassandra.db.marshal._
+import org.apache.cassandra.schema.{ColumnMetadata, TableMetadata}
 import org.apache.kafka.connect.data._
 
 import scala.collection.JavaConversions._
@@ -39,9 +39,9 @@ object ConnectSchemaBuilder {
     metaDataBuilder.build()
   }
 
-  def keySchema(cf: CFMetaData)(implicit config: CdcConfig): Schema = {
+  def keySchema(cf: TableMetadata)(implicit config: CdcConfig): Schema = {
 
-    val builder = SchemaBuilder.struct().name(cf.cfName)
+    val builder = SchemaBuilder.struct().name(cf.name)
       .field(KeyspaceField, Schema.STRING_SCHEMA)
       .field(TableField, Schema.STRING_SCHEMA)
     //    .field(ChangeTypeField, Schema.STRING_SCHEMA)
@@ -65,10 +65,10 @@ object ConnectSchemaBuilder {
     builder.build()
   }
 
-  def cdcSchema(metadata: CFMetaData)(implicit config: CdcConfig): Schema = {
+  def cdcSchema(metadata: TableMetadata)(implicit config: CdcConfig): Schema = {
     import org.apache.kafka.connect.data.SchemaBuilder
-    val cdcBuilder: SchemaBuilder = SchemaBuilder.struct.name(metadata.cfName)
-    metadata.allColumns().foreach { cd =>
+    val cdcBuilder: SchemaBuilder = SchemaBuilder.struct.name(metadata.name)
+    metadata.columns().foreach { cd =>
       addField(cd, cdcBuilder)
     }
     cdcBuilder.build()
@@ -76,7 +76,7 @@ object ConnectSchemaBuilder {
   }
 
 
-  private def addField(cd: ColumnDefinition, builder: SchemaBuilder)(implicit config: CdcConfig): Unit = {
+  private def addField(cd: ColumnMetadata, builder: SchemaBuilder)(implicit config: CdcConfig): Unit = {
     val fieldName = cd.name.toString
 
     val schema = fromType(cd.`type`)

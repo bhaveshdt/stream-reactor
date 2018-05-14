@@ -38,8 +38,8 @@ object PartitionUpdateExtensions extends StrictLogging {
              callback: SourceRecord => Unit)(implicit dataProvider: SubscriptionDataProvider, cdcConfig: CdcConfig): Unit = {
       val cfMetadata = partitionUpdate.metadata()
       val topic = dataProvider
-        .getTopic(cfMetadata.ksName, cfMetadata.cfName)
-        .getOrElse(throw new IllegalArgumentException(s"There was a problem identifying the topic for '${cfMetadata.ksName}.${cfMetadata.cfName}'."))
+        .getTopic(cfMetadata.keyspace, cfMetadata.name)
+        .getOrElse(throw new IllegalArgumentException(s"There was a problem identifying the topic for '${cfMetadata.keyspace}.${cfMetadata.name}'."))
 
       val keyStruct = KeyStructBuilder(cfMetadata, partitionUpdate)
 
@@ -47,8 +47,8 @@ object PartitionUpdateExtensions extends StrictLogging {
 
       val offset = Offset(desc.fileName(), location, desc.id)
 
-      val cdcSchema = dataProvider.getCdcSchema(cfMetadata.ksName, cfMetadata.cfName)
-        .getOrElse(throw new IllegalArgumentException(s"There was a problem identifying the Connect Source Record schema for '${cfMetadata.ksName}.${cfMetadata.cfName}'."))
+      val cdcSchema = dataProvider.getCdcSchema(cfMetadata.keyspace, cfMetadata.name)
+        .getOrElse(throw new IllegalArgumentException(s"There was a problem identifying the Connect Source Record schema for '${cfMetadata.keyspace}.${cfMetadata.name}'."))
 
       //do we have a delete?
 

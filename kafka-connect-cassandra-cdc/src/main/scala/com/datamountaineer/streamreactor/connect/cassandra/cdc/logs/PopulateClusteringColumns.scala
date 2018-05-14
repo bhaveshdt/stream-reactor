@@ -17,8 +17,8 @@ package com.datamountaineer.streamreactor.connect.cassandra.cdc.logs
 
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.config.CdcConfig
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.metadata.ConnectSchemaBuilder
-import org.apache.cassandra.config.CFMetaData
 import org.apache.cassandra.db.Clustering
+import org.apache.cassandra.schema.TableMetadata
 import org.apache.kafka.connect.data.Struct
 
 /**
@@ -26,7 +26,7 @@ import org.apache.kafka.connect.data.Struct
   */
 object PopulateClusteringColumns {
   def apply(struct: Struct,
-            metadata: CFMetaData,
+            metadata: TableMetadata,
             clustering: Clustering)(implicit config: CdcConfig): Unit = {
     val clusteringColumns = metadata.clusteringColumns()
 

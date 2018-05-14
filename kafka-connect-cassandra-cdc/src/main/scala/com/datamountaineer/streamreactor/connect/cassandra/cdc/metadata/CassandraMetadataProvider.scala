@@ -17,13 +17,14 @@ package com.datamountaineer.streamreactor.connect.cassandra.cdc.metadata
 
 import java.nio.ByteBuffer
 import java.util
+import java.util.Collections
 import java.util.concurrent.TimeUnit
 
 import com.datastax.driver.core.Cluster.Builder
 import com.datastax.driver.core.{Cluster, RemoteEndpointAwareJdkSSLOptions, Row, TypeCodec}
 import com.datamountaineer.streamreactor.connect.cassandra.cdc.config.CassandraConfig
 import com.typesafe.scalalogging.slf4j.StrictLogging
-import org.apache.cassandra.config.ColumnDefinition.ClusteringOrder
+import org.apache.cassandra.schema.ColumnMetadata.ClusteringOrder
 import org.apache.cassandra.config._
 import org.apache.cassandra.cql3.functions.{FunctionName, UDAggregate, UDFunction}
 import org.apache.cassandra.cql3.statements.SelectStatement
@@ -32,7 +33,7 @@ import org.apache.cassandra.db.marshal._
 import org.apache.cassandra.db.view.View
 import org.apache.cassandra.exceptions.InvalidRequestException
 import org.apache.cassandra.schema.CQLTypeParser.parse
-import org.apache.cassandra.schema.{SchemaKeyspace, _}
+import org.apache.cassandra.schema.{DroppedColumn, SchemaKeyspace, _}
 
 import scala.collection.JavaConversions._
 
@@ -95,7 +96,7 @@ class CassandraMetadataProvider(config: CassandraConfig) extends AutoCloseable w
     KeyspaceMetadata.create(keyspaceName, params, tables, views, types, functions)
   }
 
-  def fetchColumnFamilyMetadata(keyspaceName: String, tableName: String): CFMetaData = {
+  def fetchColumnFamilyMetadata(keyspaceName: String, tableName: String): TableMetadata = {
     val params = fetchKeyspaceParams(keyspaceName)
     val types = fetchTypes(keyspaceName)
     fetchTable(keyspaceName, tableName, types)
@@ -133,17 +134,17 @@ class CassandraMetadataProvider(config: CassandraConfig) extends AutoCloseable w
   }
 
 
-  private def fetchTable(keyspaceName: String, tableName: String, types: Types): CFMetaData = {
+  private def fetchTable(keyspaceName: String, tableName: String, types: Types): TableMetadata = {
     val query = s"SELECT * FROM ${SchemaConstants.SCHEMA_KEYSPACE_NAME}.${SchemaKeyspace.TABLES} WHERE keyspace_name = ? AND table_name = ?"
     val rows = executeQuery(query, keyspaceName, tableName)
     if (rows.isEmpty) throw new RuntimeException(String.format("%s:%s not found in the schema definitions keyspace.", keyspaceName, tableName))
     val row = rows.one
     val id = row.getUUID("id")
-    val flags = CFMetaData.flagsFromStrings(getFrozenSet(row, "flags", UTF8Type.instance))
-    val isSuper = flags.contains(CFMetaData.Flag.SUPER)
-    val isCounter = flags.contains(CFMetaData.Flag.COUNTER)
-    val isDense = flags.contains(CFMetaData.Flag.DENSE)
-    val isCompound = flags.contains(CFMetaData.Flag.COMPOUND)
+    val flags = TableMetadata.Flag.fromStringSet(getFrozenSet(row, "flags", UTF8Type.instance))
+    val isSuper = flags.contains(TableMetadata.Flag.SUPER)
+    val isCounter = flags.contains(TableMetadata.Flag.COUNTER)
+    val isDense = flags.contains(TableMetadata.Flag.DENSE)
+    val isCompound = flags.contains(TableMetadata.Flag.COMPOUND)
     val columns = fetchColumns(keyspaceName, tableName, types)
     if (!columns.exists(_.isPartitionKey)) {
       val msg = s"Table $keyspaceName.$tableName did not have any partition key columns in the schema tables"
@@ -152,52 +153,55 @@ class CassandraMetadataProvider(config: CassandraConfig) extends AutoCloseable w
     val droppedColumns = fetchDroppedColumns(keyspaceName, tableName)
     val indexes = fetchIndexes(keyspaceName, tableName)
     val triggers = fetchTriggers(keyspaceName, tableName)
-    CFMetaData.create(keyspaceName, tableName, id, isDense, isCompound, isSuper, isCounter, false, columns, DatabaseDescriptor.getPartitioner)
-      .params(createTableParamsFromRow(row))
+    TableMetadata.builder(keyspaceName, tableName, TableId.fromUUID(id)).isDense(isDense)
+      .isCompound(isCompound).isSuper(isSuper).isCounter(isCounter).isView(false).addColumns(columns)
+      .partitioner(DatabaseDescriptor.getPartitioner).params(createTableParamsFromRow(row))
       .droppedColumns(droppedColumns)
       .indexes(indexes)
       .triggers(triggers)
+      .build()
   }
 
   private def fetchColumns(keyspace: String, table: String, types: Types) = {
     val query = s"SELECT * FROM ${SchemaConstants.SCHEMA_KEYSPACE_NAME}.${SchemaKeyspace.COLUMNS} WHERE keyspace_name = ? AND table_name = ?"
-    val columns = new util.ArrayList[ColumnDefinition]
+    val columns = new util.ArrayList[ColumnMetadata]
     executeQuery(query, keyspace, table).foreach(row => columns.add(createColumnFromRow(row, types)))
     columns
   }
 
-  private def createColumnFromRow(row: Row, types: Types): ColumnDefinition = {
+  private def createColumnFromRow(row: Row, types: Types): ColumnMetadata = {
     val keyspace = row.getString("keyspace_name")
     val table = row.getString("table_name")
-    val kind = ColumnDefinition.Kind.valueOf(row.getString("kind").toUpperCase)
+    val kind = ColumnMetadata.Kind.valueOf(row.getString("kind").toUpperCase)
     val position = row.getInt("position")
     val order = ClusteringOrder.valueOf(row.getString("clustering_order").toUpperCase)
     var `type` = parse(keyspace, row.getString("type"), types)
     if (order eq ClusteringOrder.DESC) `type` = ReversedType.getInstance(`type`)
     val name = ColumnIdentifier.getInterned(`type`, row.getBytes("column_name_bytes"), row.getString("column_name"))
-    new ColumnDefinition(keyspace, table, name, `type`, position, kind)
+    new ColumnMetadata(keyspace, table, name, `type`, position, kind)
   }
 
   private def fetchDroppedColumns(keyspace: String, table: String) = {
     val query = s"SELECT * FROM ${SchemaConstants.SCHEMA_KEYSPACE_NAME}.${SchemaKeyspace.DROPPED_COLUMNS} WHERE keyspace_name = ? AND table_name = ?"
-    val columns = new util.HashMap[ByteBuffer, CFMetaData.DroppedColumn]
+    val columns = new util.HashMap[ByteBuffer, DroppedColumn]
     for (row <- executeQuery(query, keyspace, table)) {
       val column = createDroppedColumnFromRow(row)
-      columns.put(UTF8Type.instance.decompose(column.name), column)
+      columns.put(UTF8Type.instance.decompose(column.column.name.toString), column)
     }
     columns
   }
 
   private def createDroppedColumnFromRow(row: Row) = {
     val keyspace = row.getString("keyspace_name")
+    val table = row.getString("table_name")
     val name = row.getString("column_name")
     /*
              * we never store actual UDT names in dropped column types (so that we can safely drop types if nothing refers to
              * them anymore), so before storing dropped columns in schema we expand UDTs to tuples. See expandUserTypes method.
              * Because of that, we can safely pass Types.none() to parse()
              */ val `type` = parse(keyspace, row.getString("type"), org.apache.cassandra.schema.Types.none)
-    val droppedTime = TimeUnit.MILLISECONDS.toMicros(row.getLong("dropped_time"))
-    new CFMetaData.DroppedColumn(name, `type`, droppedTime)
+    val droppedTime = TimeUnit.MILLISECONDS.toMicros(row.getTimestamp("dropped_time").getTime)
+    new DroppedColumn(ColumnMetadata.regularColumn(keyspace, table, name, `type`), droppedTime)
   }
 
   private def fetchIndexes(keyspace: String, table: String) = {
@@ -270,10 +274,14 @@ class CassandraMetadataProvider(config: CassandraConfig) extends AutoCloseable w
     val whereClause = row.getString("where_clause")
     val columns = fetchColumns(keyspaceName, viewName, types)
     val droppedColumns = fetchDroppedColumns(keyspaceName, viewName)
-    val cfm = CFMetaData.create(keyspaceName, viewName, id, false, true, false, false, true, columns, DatabaseDescriptor.getPartitioner).params(createTableParamsFromRow(row)).droppedColumns(droppedColumns)
+    val cfm = TableMetadata.builder(keyspaceName, viewName, TableId.fromUUID(id)).isDense(false)
+      .isCompound(true).isSuper(false).isCounter(false).isView(true).addColumns(columns)
+      .partitioner(DatabaseDescriptor.getPartitioner).params(createTableParamsFromRow(row))
+      .droppedColumns(droppedColumns)
+      .build()
     val rawSelect = View.buildSelectStatement(baseTableName, columns, whereClause)
     val rawStatement = QueryProcessor.parseStatement(rawSelect).asInstanceOf[SelectStatement.RawStatement]
-    new ViewDefinition(keyspaceName, viewName, baseTableId, baseTableName, includeAll, rawStatement, whereClause, cfm)
+    new ViewMetadata(keyspaceName, viewName, TableId.fromUUID(baseTableId), baseTableName, includeAll, rawStatement, whereClause, cfm)
   }
 
   private def fetchFunctions(keyspaceName: String, types: Types) = {
@@ -317,11 +325,11 @@ class CassandraMetadataProvider(config: CassandraConfig) extends AutoCloseable w
         udf
       case _ =>
         try
-          UDFunction.create(name, argNames, argTypes, returnType, calledOnNullInput, language, body)
+          UDFunction.create(name, argNames, argTypes, returnType, calledOnNullInput, language, body, false, false, Collections.emptyList())
         catch {
           case e: InvalidRequestException =>
             logger.error(String.format("Cannot load function '%s' from schema: this function won't be available (on this node)", name), e)
-            UDFunction.createBrokenFunction(name, argNames, argTypes, returnType, calledOnNullInput, language, body, e)
+            UDFunction.createBrokenFunction(name, argNames, argTypes, returnType, calledOnNullInput, language, body, false, false, Collections.emptyList(), e)
         }
     }
   }
@@ -349,10 +357,10 @@ class CassandraMetadataProvider(config: CassandraConfig) extends AutoCloseable w
     val initcond = if (row.getColumnDefinitions.contains("initcond")) Terms.asBytes(ksName, row.getString("initcond"), stateType)
     else null
     try
-      UDAggregate.create(functions, name, argTypes, returnType, stateFunc, finalFunc, stateType, initcond)
+      UDAggregate.create(functions, name, argTypes, returnType, stateFunc, finalFunc, stateType, initcond, true)
     catch {
       case reason: InvalidRequestException =>
-        UDAggregate.createBroken(name, argTypes, returnType, initcond, reason)
+        UDAggregate.createBroken(name, argTypes, returnType, initcond, true, reason)
     }
   }
 
