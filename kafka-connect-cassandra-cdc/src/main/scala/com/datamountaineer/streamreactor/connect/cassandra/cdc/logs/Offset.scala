@@ -21,13 +21,13 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 
 case class Offset(fileName: String,
-                  location: Int,
+                  location: Long,
                   descriptionId: Long) {
 
   def toMap(): mutable.HashMap[String, Object] = {
     val map = new mutable.HashMap[String, Object]()
     map.put("file", fileName)
-    map.put("location", new Integer(location))
+    map.put("location", new lang.Long(location))
     map.put("id", new lang.Long(descriptionId))
     map
   }
@@ -48,7 +48,7 @@ object Offset {
         throw new IllegalArgumentException(s"Invalid state received. Missing state key:'location'. Available values are:${map.mkString(",")}")
       }
       val file = m.get("file").asInstanceOf[String]
-      val location = m.get("location").asInstanceOf[Int]
+      val location = m.get("location").asInstanceOf[Long]
       val id = m.get("id").asInstanceOf[Long]
       Offset(file, location, id)
     }

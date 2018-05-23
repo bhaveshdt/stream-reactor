@@ -159,7 +159,7 @@ object ConnectSchemaBuilder {
       case _: DurationType | _: InetAddressType | _: TimeUUIDType | _: UUIDType => Option(value).map(_.toString).orNull
       case _: EmptyType => null
       case _: TimeType => Option(value).map(_.asInstanceOf[Long].toInt).orNull
-      case _: TimestampType => Option(value).map(_.asInstanceOf[java.util.Date]).map(Timestamp.fromLogical(schema, _)).orNull
+      //case _: TimestampType => Option(value).map(_.asInstanceOf[java.util.Date]).map(Timestamp.fromLogical(schema, _)).orNull
       case _: DecimalType =>
         Option(value).map { d =>
           Decimal.fromLogical(schema, d.asInstanceOf[BigDecimal].bigDecimal.setScale(config.decimalScale))

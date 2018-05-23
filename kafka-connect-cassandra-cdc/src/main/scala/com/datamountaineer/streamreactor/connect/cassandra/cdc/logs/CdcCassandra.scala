@@ -105,7 +105,7 @@ class CdcCassandra()(implicit config: CdcConfig) extends AutoCloseable with Stri
         try {
           val file = path.toFile
           if (file.exists()) {
-            readFile(path.toFile, new CommitLogPosition(o.descriptionId, o.location))
+            readFile(path.toFile, new CommitLogPosition(o.descriptionId, o.location.toInt))
           }
         }
         catch {
